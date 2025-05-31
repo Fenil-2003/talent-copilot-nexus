@@ -1,40 +1,35 @@
 
-import { useState } from "react";
-import { Search, Filter, SortAsc, Grid2x2, List } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Filter, Grid2x2, List } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import CandidateCard from "./CandidateCard";
-
-interface Candidate {
-  id: number;
-  name: string;
-  title: string;
-  company: string;
-  location: string;
-  score: number;
-  skills: string[];
-  experience: string;
-  education: string;
-  avatar: string;
-  highlights: string[];
-}
+import { useCandidates } from "@/hooks/useCandidates";
 
 interface SearchInterfaceProps {
   query: string;
   onQueryChange: (query: string) => void;
-  candidates: Candidate[];
+  candidates: any[];
 }
 
-const SearchInterface = ({ query, onQueryChange, candidates }: SearchInterfaceProps) => {
+const SearchInterface = ({ query, onQueryChange }: SearchInterfaceProps) => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('score');
-  const [filters, setFilters] = useState({
-    experience: '',
-    location: '',
-    skills: ''
-  });
+  const { candidates, loading, searchCandidates } = useCandidates();
+
+  useEffect(() => {
+    if (query) {
+      searchCandidates(query);
+    }
+  }, [query]);
+
+  const handleSearch = () => {
+    if (query.trim()) {
+      searchCandidates(query);
+    }
+  };
 
   return (
     <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white/50 backdrop-blur-sm">
@@ -46,29 +41,16 @@ const SearchInterface = ({ query, onQueryChange, candidates }: SearchInterfacePr
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
               <Input
                 type="text"
-                placeholder="Refine your search..."
+                placeholder="Search for candidates using natural language..."
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-10 h-12 border-slate-200 rounded-lg"
               />
             </div>
-            <Button variant="outline" className="h-12 px-4">
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
+            <Button onClick={handleSearch} disabled={loading} className="h-12 px-6">
+              {loading ? "Searching..." : "Search"}
             </Button>
-          </div>
-
-          {/* Active Filters */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-              Experience: 5+ years
-            </Badge>
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              Remote OK
-            </Badge>
-            <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-              Tech: React
-            </Badge>
           </div>
         </div>
 
@@ -84,7 +66,7 @@ const SearchInterface = ({ query, onQueryChange, candidates }: SearchInterfacePr
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="score">Best Match</SelectItem>
-                <SelectItem value="experience">Experience</SelectItem>
+                <SelectItem value="experience_years">Experience</SelectItem>
                 <SelectItem value="name">Name</SelectItem>
                 <SelectItem value="location">Location</SelectItem>
               </SelectContent>
@@ -110,20 +92,26 @@ const SearchInterface = ({ query, onQueryChange, candidates }: SearchInterfacePr
         </div>
 
         {/* Results */}
-        <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
-          {candidates.map((candidate, index) => (
-            <div key={candidate.id} className="animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
-              <CandidateCard candidate={candidate} viewMode={viewMode} />
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-slate-600">AI is searching for candidates...</p>
+          </div>
+        ) : (
+          <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
+            {candidates.map((candidate, index) => (
+              <div key={candidate.id} className="animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
+                <CandidateCard candidate={candidate} viewMode={viewMode} />
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Load More */}
-        <div className="text-center mt-8">
-          <Button variant="outline" className="px-8">
-            Load More Results
-          </Button>
-        </div>
+        {candidates.length === 0 && !loading && query && (
+          <div className="text-center py-12">
+            <p className="text-slate-600">No candidates found. Try a different search query.</p>
+          </div>
+        )}
       </div>
     </section>
   );

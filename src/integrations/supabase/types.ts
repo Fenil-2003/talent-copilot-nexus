@@ -24,6 +24,155 @@ export type Database = {
         }
         Relationships: []
       }
+      candidates: {
+        Row: {
+          company: string | null
+          created_at: string
+          education: string | null
+          email: string | null
+          experience_years: number | null
+          id: string
+          linkedin_url: string | null
+          location: string | null
+          name: string
+          notes: string | null
+          resume_url: string | null
+          score: number | null
+          skills: string[] | null
+          status: string | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          education?: string | null
+          email?: string | null
+          experience_years?: number | null
+          id?: string
+          linkedin_url?: string | null
+          location?: string | null
+          name: string
+          notes?: string | null
+          resume_url?: string | null
+          score?: number | null
+          skills?: string[] | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          education?: string | null
+          email?: string | null
+          experience_years?: number | null
+          id?: string
+          linkedin_url?: string | null
+          location?: string | null
+          name?: string
+          notes?: string | null
+          resume_url?: string | null
+          score?: number | null
+          skills?: string[] | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saved_candidates: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_candidates_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      searches: {
+        Row: {
+          created_at: string
+          filters: Json | null
+          id: string
+          query: string
+          results_count: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          filters?: Json | null
+          id?: string
+          query: string
+          results_count?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          filters?: Json | null
+          id?: string
+          query?: string
+          results_count?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
