@@ -98,6 +98,7 @@ async function matchCandidatesWithLLM(query: string, candidates: any[]) {
 
   try {
     console.log('Using Grok LLM for candidate matching...')
+    console.log('API Key present:', !!grokApiKey)
     
     // Prepare candidate profiles for LLM
     const candidateProfiles = candidates.map(candidate => ({
@@ -111,8 +112,9 @@ async function matchCandidatesWithLLM(query: string, candidates: any[]) {
       education: candidate.education
     }))
 
-    const prompt = `
-You are an expert recruiter AI. Your task is to match candidates to a job search query and provide relevance scores.
+    console.log('Candidate profiles prepared:', candidateProfiles.length)
+
+    const prompt = `You are an expert recruiter AI. Your task is to match candidates to a job search query and provide relevance scores.
 
 SEARCH QUERY: "${query}"
 
@@ -136,8 +138,25 @@ Scoring criteria:
 - Below 60: Poor match (significant gaps)
 
 Only return candidates with scores 60 and above. Sort by score descending.
-Return ONLY the JSON array, no other text.
-`
+Return ONLY the JSON array, no other text.`
+
+    const requestBody = {
+      model: 'grok-beta',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional recruiter AI that matches candidates to job requirements. Always return valid JSON.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000
+    }
+
+    console.log('Making request to Grok API...')
 
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
@@ -145,30 +164,21 @@ Return ONLY the JSON array, no other text.
         'Authorization': `Bearer ${grokApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'grok-beta',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional recruiter AI that matches candidates to job requirements. Always return valid JSON.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000
-      }),
+      body: JSON.stringify(requestBody),
     })
 
+    console.log('Grok API response status:', response.status)
+    
     if (!response.ok) {
-      throw new Error(`Grok API error: ${response.status}`)
+      const errorText = await response.text()
+      console.error('Grok API error details:', errorText)
+      throw new Error(`Grok API error: ${response.status} - ${errorText}`)
     }
 
     const data = await response.json()
+    console.log('Grok API response received')
+    
     const llmResponse = data.choices[0].message.content
-
     console.log('Grok LLM Response:', llmResponse)
 
     let matchResults
@@ -176,6 +186,7 @@ Return ONLY the JSON array, no other text.
       matchResults = JSON.parse(llmResponse)
     } catch (parseError) {
       console.error('Failed to parse Grok LLM response:', parseError)
+      console.error('Raw response:', llmResponse)
       return performKeywordMatching(query, candidates)
     }
 
