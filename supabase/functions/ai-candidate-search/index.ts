@@ -23,31 +23,55 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Generate AI-powered mock candidates based on the search query
-    const mockCandidates = await generateLLMPoweredCandidates(query)
-    
-    console.log('Generated candidates:', mockCandidates.length)
-    
-    // Save candidates to database
-    const candidatesWithUserId = mockCandidates.map(candidate => ({
-      ...candidate,
-      user_id: userId
-    }))
-
-    const { data, error } = await supabaseClient
+    // First, get all existing candidates for this user
+    const { data: existingCandidates, error: fetchError } = await supabaseClient
       .from('candidates')
-      .insert(candidatesWithUserId)
-      .select()
+      .select('*')
+      .eq('user_id', userId)
 
-    if (error) {
-      console.error('Database error:', error)
-      throw error
+    if (fetchError) {
+      console.error('Error fetching existing candidates:', fetchError)
     }
 
-    console.log('Saved candidates to database:', data?.length)
+    // If no existing candidates, generate some mock candidates first
+    if (!existingCandidates || existingCandidates.length === 0) {
+      console.log('No existing candidates found, generating mock candidates...')
+      const mockCandidates = await generateMockCandidates()
+      
+      const candidatesWithUserId = mockCandidates.map(candidate => ({
+        ...candidate,
+        user_id: userId
+      }))
+
+      const { data: insertedCandidates, error: insertError } = await supabaseClient
+        .from('candidates')
+        .insert(candidatesWithUserId)
+        .select()
+
+      if (insertError) {
+        console.error('Error inserting mock candidates:', insertError)
+        throw insertError
+      }
+
+      // Use the inserted candidates for matching
+      const matchedCandidates = await matchCandidatesWithLLM(query, insertedCandidates)
+      
+      return new Response(
+        JSON.stringify({ candidates: matchedCandidates }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      )
+    }
+
+    // Use LLM to match and rank existing candidates
+    const matchedCandidates = await matchCandidatesWithLLM(query, existingCandidates)
+    
+    console.log('LLM matched candidates:', matchedCandidates.length)
 
     return new Response(
-      JSON.stringify({ candidates: data }),
+      JSON.stringify({ candidates: matchedCandidates }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
@@ -65,128 +89,237 @@ serve(async (req) => {
   }
 })
 
-async function generateLLMPoweredCandidates(query: string) {
-  console.log('Generating LLM-powered candidates for query:', query)
+async function matchCandidatesWithLLM(query: string, candidates: any[]) {
+  const openAIApiKey = Deno.env.get('OPENAI_API_KEY')
   
-  // Enhanced AI-powered candidate generation with better matching
-  const queryLower = query.toLowerCase()
-  
-  // Advanced skill extraction and matching
-  const skillsDatabase = {
-    'react': ['React', 'JavaScript', 'TypeScript', 'Redux', 'HTML/CSS', 'Node.js'],
-    'frontend': ['React', 'Vue.js', 'Angular', 'JavaScript', 'TypeScript', 'HTML/CSS'],
-    'python': ['Python', 'Django', 'Flask', 'FastAPI', 'PostgreSQL', 'AWS'],
-    'backend': ['Python', 'Node.js', 'Java', 'Go', 'PostgreSQL', 'MongoDB'],
-    'devops': ['AWS', 'Docker', 'Kubernetes', 'CI/CD', 'Terraform', 'Jenkins'],
-    'ai': ['Python', 'TensorFlow', 'PyTorch', 'Machine Learning', 'Data Science', 'NumPy'],
-    'machine learning': ['Python', 'TensorFlow', 'PyTorch', 'Scikit-learn', 'Pandas', 'NumPy'],
-    'product': ['Product Management', 'Analytics', 'Roadmapping', 'User Research', 'Agile', 'SQL'],
-    'fullstack': ['React', 'Node.js', 'Python', 'JavaScript', 'PostgreSQL', 'AWS'],
-    'mobile': ['React Native', 'Flutter', 'Swift', 'Kotlin', 'iOS', 'Android']
+  if (!openAIApiKey) {
+    console.log('No OpenAI API key found, falling back to keyword matching')
+    return performKeywordMatching(query, candidates)
   }
 
-  const locations = ['San Francisco, CA', 'New York, NY', 'Seattle, WA', 'Austin, TX', 'Boston, MA', 'Remote', 'Los Angeles, CA']
-  const companies = ['Google', 'Microsoft', 'Amazon', 'Meta', 'Apple', 'Netflix', 'Uber', 'Airbnb', 'Stripe', 'OpenAI']
-  
-  // Extract years of experience
-  const experienceMatch = query.match(/(\d+)\+?\s*years?/i)
-  const requestedExperience = experienceMatch ? parseInt(experienceMatch[1]) : Math.floor(Math.random() * 8) + 2
-  
-  // Determine seniority level
-  const seniorityLevel = queryLower.includes('senior') ? 'Senior' : 
-                        queryLower.includes('lead') ? 'Lead' :
-                        queryLower.includes('principal') ? 'Principal' :
-                        requestedExperience >= 5 ? 'Senior' : ''
-  
-  // Extract relevant skills based on query
-  let relevantSkills = ['JavaScript', 'Python', 'Communication', 'Problem Solving']
-  let jobTitle = 'Software Engineer'
-  
-  for (const [key, skills] of Object.entries(skillsDatabase)) {
-    if (queryLower.includes(key)) {
-      relevantSkills = skills
-      jobTitle = getJobTitle(key, seniorityLevel)
-      break
-    }
-  }
+  try {
+    console.log('Using LLM for candidate matching...')
+    
+    // Prepare candidate profiles for LLM
+    const candidateProfiles = candidates.map(candidate => ({
+      id: candidate.id,
+      name: candidate.name,
+      title: candidate.title,
+      company: candidate.company,
+      location: candidate.location,
+      experience_years: candidate.experience_years,
+      skills: candidate.skills || [],
+      education: candidate.education
+    }))
 
-  // Generate diverse, realistic candidates
-  const firstNames = ['Alex', 'Jordan', 'Casey', 'Morgan', 'Taylor', 'Riley', 'Avery', 'Quinn', 'Sage', 'Rowan']
-  const lastNames = ['Johnson', 'Smith', 'Williams', 'Brown', 'Davis', 'Miller', 'Wilson', 'Moore', 'Garcia', 'Rodriguez']
-  
-  const candidates = []
-  for (let i = 0; i < 6; i++) {
-    const firstName = firstNames[i % firstNames.length]
-    const lastName = lastNames[i % lastNames.length]
-    const yearsExp = Math.max(requestedExperience + Math.floor(Math.random() * 4) - 2, 1)
-    
-    // Generate more realistic scores based on query match
-    const baseScore = 75 + Math.floor(Math.random() * 20) // 75-95
-    const experienceBonus = Math.abs(yearsExp - requestedExperience) <= 2 ? 5 : 0
-    const finalScore = Math.min(baseScore + experienceBonus, 98)
-    
-    candidates.push({
-      name: `${firstName} ${lastName}`,
-      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@email.com`,
-      title: jobTitle,
-      company: companies[i % companies.length],
-      location: locations[i % locations.length],
-      experience_years: yearsExp,
-      education: getEducation(i),
-      skills: getSkillsForCandidate(relevantSkills, i),
-      score: finalScore,
-      status: 'new',
-      notes: `AI-generated candidate matching query: "${query}". Experience level: ${yearsExp} years.`
+    const prompt = `
+You are an expert recruiter AI. Your task is to match candidates to a job search query and provide relevance scores.
+
+SEARCH QUERY: "${query}"
+
+CANDIDATES:
+${JSON.stringify(candidateProfiles, null, 2)}
+
+Please analyze each candidate against the search query and return a JSON array with the following structure:
+[
+  {
+    "id": "candidate_id",
+    "score": 85,
+    "reasoning": "Brief explanation of why this candidate matches"
+  }
+]
+
+Scoring criteria:
+- 90-100: Perfect match (skills, experience, and background align perfectly)
+- 80-89: Strong match (most requirements met with minor gaps)
+- 70-79: Good match (solid fit with some missing elements)
+- 60-69: Moderate match (partial fit, would need training/development)
+- Below 60: Poor match (significant gaps)
+
+Only return candidates with scores 60 and above. Sort by score descending.
+Return ONLY the JSON array, no other text.
+`
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional recruiter AI that matches candidates to job requirements. Always return valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000
+      }),
     })
-  }
 
-  console.log('Generated candidates with scores:', candidates.map(c => ({ name: c.name, score: c.score })))
-  return candidates
-}
-
-function getJobTitle(skill: string, seniority: string): string {
-  const titleMap: { [key: string]: string } = {
-    'react': 'Frontend Developer',
-    'frontend': 'Frontend Developer', 
-    'python': 'Backend Developer',
-    'backend': 'Backend Developer',
-    'devops': 'DevOps Engineer',
-    'ai': 'AI Engineer',
-    'machine learning': 'Machine Learning Engineer',
-    'product': 'Product Manager',
-    'fullstack': 'Full Stack Developer',
-    'mobile': 'Mobile Developer'
-  }
-  
-  const baseTitle = titleMap[skill] || 'Software Engineer'
-  return seniority ? `${seniority} ${baseTitle}` : baseTitle
-}
-
-function getEducation(index: number): string {
-  const educations = [
-    'BS Computer Science - Stanford University',
-    'MS Software Engineering - MIT', 
-    'BS Electrical Engineering - UC Berkeley',
-    'MS Computer Science - Carnegie Mellon',
-    'BS Information Technology - University of Washington',
-    'PhD Computer Science - Harvard University'
-  ]
-  return educations[index % educations.length]
-}
-
-function getSkillsForCandidate(baseSkills: string[], index: number): string[] {
-  // Add some variation to skills
-  const additionalSkills = ['Git', 'Agile', 'Scrum', 'REST APIs', 'GraphQL', 'Docker', 'Linux']
-  const candidateSkills = [...baseSkills.slice(0, 4)]
-  
-  // Add 1-2 additional skills for variety
-  const extraSkillsCount = 1 + (index % 2)
-  for (let i = 0; i < extraSkillsCount; i++) {
-    const randomSkill = additionalSkills[(index + i) % additionalSkills.length]
-    if (!candidateSkills.includes(randomSkill)) {
-      candidateSkills.push(randomSkill)
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`)
     }
+
+    const data = await response.json()
+    const llmResponse = data.choices[0].message.content
+
+    console.log('LLM Response:', llmResponse)
+
+    let matchResults
+    try {
+      matchResults = JSON.parse(llmResponse)
+    } catch (parseError) {
+      console.error('Failed to parse LLM response:', parseError)
+      return performKeywordMatching(query, candidates)
+    }
+
+    // Map the LLM results back to full candidate objects
+    const rankedCandidates = matchResults.map((result: any) => {
+      const candidate = candidates.find(c => c.id === result.id)
+      if (candidate) {
+        return {
+          ...candidate,
+          score: result.score,
+          llm_reasoning: result.reasoning
+        }
+      }
+      return null
+    }).filter(Boolean)
+
+    console.log('Successfully matched candidates with LLM:', rankedCandidates.length)
+    return rankedCandidates
+
+  } catch (error) {
+    console.error('LLM matching failed:', error)
+    return performKeywordMatching(query, candidates)
   }
+}
+
+function performKeywordMatching(query: string, candidates: any[]) {
+  console.log('Performing keyword-based matching as fallback')
   
-  return candidateSkills
+  const queryLower = query.toLowerCase()
+  const keywords = queryLower.split(' ').filter(word => word.length > 2)
+  
+  return candidates.map(candidate => {
+    let score = 0
+    const candidateText = `${candidate.title} ${candidate.company} ${(candidate.skills || []).join(' ')} ${candidate.education}`.toLowerCase()
+    
+    keywords.forEach(keyword => {
+      if (candidateText.includes(keyword)) {
+        score += 15
+      }
+    })
+    
+    // Boost score based on experience relevance
+    if (candidate.experience_years) {
+      const expMatch = query.match(/(\d+)\+?\s*years?/i)
+      if (expMatch) {
+        const requestedExp = parseInt(expMatch[1])
+        const diff = Math.abs(candidate.experience_years - requestedExp)
+        if (diff <= 2) score += 20
+        else if (diff <= 5) score += 10
+      }
+    }
+    
+    return {
+      ...candidate,
+      score: Math.min(score, 95)
+    }
+  }).filter(candidate => candidate.score >= 30)
+    .sort((a, b) => b.score - a.score)
+}
+
+async function generateMockCandidates() {
+  console.log('Generating mock candidate database...')
+  
+  const mockCandidates = [
+    {
+      name: 'Alex Johnson',
+      email: 'alex.johnson@email.com',
+      title: 'Senior React Developer',
+      company: 'Google',
+      location: 'San Francisco, CA',
+      experience_years: 6,
+      education: 'BS Computer Science - Stanford University',
+      skills: ['React', 'JavaScript', 'TypeScript', 'Node.js', 'GraphQL'],
+      score: 0,
+      status: 'new',
+      notes: 'Mock candidate for testing'
+    },
+    {
+      name: 'Sarah Chen',
+      email: 'sarah.chen@email.com',
+      title: 'AI Engineer',
+      company: 'OpenAI',
+      location: 'Remote',
+      experience_years: 4,
+      education: 'PhD Computer Science - MIT',
+      skills: ['Python', 'TensorFlow', 'PyTorch', 'Machine Learning', 'NLP'],
+      score: 0,
+      status: 'new',
+      notes: 'Mock candidate for testing'
+    },
+    {
+      name: 'Mike Rodriguez',
+      email: 'mike.rodriguez@email.com',
+      title: 'DevOps Engineer',
+      company: 'Amazon',
+      location: 'Seattle, WA',
+      experience_years: 8,
+      education: 'MS Software Engineering - University of Washington',
+      skills: ['AWS', 'Docker', 'Kubernetes', 'Terraform', 'CI/CD'],
+      score: 0,
+      status: 'new',
+      notes: 'Mock candidate for testing'
+    },
+    {
+      name: 'Emily Davis',
+      email: 'emily.davis@email.com',
+      title: 'Product Manager',
+      company: 'Meta',
+      location: 'New York, NY',
+      experience_years: 5,
+      education: 'MBA - Harvard Business School',
+      skills: ['Product Strategy', 'Analytics', 'User Research', 'Agile', 'SQL'],
+      score: 0,
+      status: 'new',
+      notes: 'Mock candidate for testing'
+    },
+    {
+      name: 'David Kim',
+      email: 'david.kim@email.com',
+      title: 'Full Stack Developer',
+      company: 'Stripe',
+      location: 'Austin, TX',
+      experience_years: 7,
+      education: 'BS Software Engineering - UC Berkeley',
+      skills: ['React', 'Node.js', 'Python', 'PostgreSQL', 'AWS'],
+      score: 0,
+      status: 'new',
+      notes: 'Mock candidate for testing'
+    },
+    {
+      name: 'Lisa Wang',
+      email: 'lisa.wang@email.com',
+      title: 'Data Scientist',
+      company: 'Netflix',
+      location: 'Los Angeles, CA',
+      experience_years: 3,
+      education: 'MS Data Science - Carnegie Mellon',
+      skills: ['Python', 'R', 'SQL', 'Pandas', 'Scikit-learn'],
+      score: 0,
+      status: 'new',
+      notes: 'Mock candidate for testing'
+    }
+  ]
+
+  return mockCandidates
 }
