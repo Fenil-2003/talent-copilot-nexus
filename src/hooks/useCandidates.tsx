@@ -12,6 +12,7 @@ interface Candidate {
   score: number;
   skills: string[];
   experience_years: number;
+  experience: string; // Add this property
   education: string;
   avatar?: string;
   highlights?: string[];
