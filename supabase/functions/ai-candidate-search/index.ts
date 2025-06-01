@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -90,15 +89,15 @@ serve(async (req) => {
 })
 
 async function matchCandidatesWithLLM(query: string, candidates: any[]) {
-  const openAIApiKey = Deno.env.get('OPENAI_API_KEY')
+  const grokApiKey = Deno.env.get('GROK_API_KEY')
   
-  if (!openAIApiKey) {
-    console.log('No OpenAI API key found, falling back to keyword matching')
+  if (!grokApiKey) {
+    console.log('No Grok API key found, falling back to keyword matching')
     return performKeywordMatching(query, candidates)
   }
 
   try {
-    console.log('Using LLM for candidate matching...')
+    console.log('Using Grok LLM for candidate matching...')
     
     // Prepare candidate profiles for LLM
     const candidateProfiles = candidates.map(candidate => ({
@@ -140,14 +139,14 @@ Only return candidates with scores 60 and above. Sort by score descending.
 Return ONLY the JSON array, no other text.
 `
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
+        'Authorization': `Bearer ${grokApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'grok-beta',
         messages: [
           {
             role: 'system',
@@ -164,19 +163,19 @@ Return ONLY the JSON array, no other text.
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+      throw new Error(`Grok API error: ${response.status}`)
     }
 
     const data = await response.json()
     const llmResponse = data.choices[0].message.content
 
-    console.log('LLM Response:', llmResponse)
+    console.log('Grok LLM Response:', llmResponse)
 
     let matchResults
     try {
       matchResults = JSON.parse(llmResponse)
     } catch (parseError) {
-      console.error('Failed to parse LLM response:', parseError)
+      console.error('Failed to parse Grok LLM response:', parseError)
       return performKeywordMatching(query, candidates)
     }
 
@@ -193,11 +192,11 @@ Return ONLY the JSON array, no other text.
       return null
     }).filter(Boolean)
 
-    console.log('Successfully matched candidates with LLM:', rankedCandidates.length)
+    console.log('Successfully matched candidates with Grok LLM:', rankedCandidates.length)
     return rankedCandidates
 
   } catch (error) {
-    console.error('LLM matching failed:', error)
+    console.error('Grok LLM matching failed:', error)
     return performKeywordMatching(query, candidates)
   }
 }
