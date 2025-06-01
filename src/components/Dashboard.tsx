@@ -15,21 +15,32 @@ interface DashboardStats {
   savedCandidates: number;
 }
 
-const Dashboard = () => {
+interface DashboardProps {
+  initialSearchQuery?: string;
+}
+
+const Dashboard = ({ initialSearchQuery = "" }: DashboardProps) => {
   const { user, signOut } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalCandidates: 0,
     totalSearches: 0,
     savedCandidates: 0
   });
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(!!initialSearchQuery);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
 
   useEffect(() => {
     if (user) {
       fetchStats();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (initialSearchQuery) {
+      setSearchQuery(initialSearchQuery);
+      setShowSearch(true);
+    }
+  }, [initialSearchQuery]);
 
   const fetchStats = async () => {
     if (!user) return;
@@ -147,7 +158,7 @@ const Dashboard = () => {
         <SearchInterface 
           query={searchQuery}
           onQueryChange={setSearchQuery}
-          candidates={[]} // Will be populated with real data
+          candidates={[]} // Will be populated with real data from the hook
         />
       )}
     </div>

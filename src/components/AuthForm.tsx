@@ -7,8 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft } from "lucide-react";
 
-const AuthForm = () => {
+interface AuthFormProps {
+  onBack?: () => void;
+}
+
+const AuthForm = ({ onBack }: AuthFormProps) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -78,8 +83,17 @@ const AuthForm = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Hire Copilot</CardTitle>
-          <CardDescription>AI-Powered Hiring Made Simple</CardDescription>
+          {onBack && (
+            <Button 
+              variant="ghost" 
+              onClick={onBack}
+              className="absolute top-4 left-4 p-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <CardTitle className="text-2xl font-bold">Sign in to continue</CardTitle>
+          <CardDescription>Access AI-powered candidate search</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
