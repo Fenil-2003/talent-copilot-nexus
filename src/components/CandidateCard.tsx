@@ -6,17 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Candidate {
-  id: number;
+  id: string;
   name: string;
   title: string;
   company: string;
   location: string;
   score: number;
   skills: string[];
+  experience_years: number;
   experience: string;
   education: string;
-  avatar: string;
-  highlights: string[];
+  avatar?: string;
+  highlights?: string[];
+  email?: string;
+  status: string;
+  notes?: string;
 }
 
 interface CandidateCardProps {
@@ -93,7 +97,7 @@ const CandidateCard = ({ candidate, viewMode }: CandidateCardProps) => {
             <span className="text-xs font-medium text-blue-600">AI Insights</span>
           </div>
           <ul className="text-xs text-slate-600 space-y-1">
-            {candidate.highlights.slice(0, 2).map((highlight, index) => (
+            {candidate.highlights?.slice(0, 2).map((highlight, index) => (
               <li key={index} className="flex items-start">
                 <span className="inline-block w-1 h-1 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0"></span>
                 {highlight}
